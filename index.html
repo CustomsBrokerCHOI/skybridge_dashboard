@@ -23,7 +23,7 @@ body{font-family:'Segoe UI','Malgun Gothic',sans-serif;background:var(--bg);colo
 @keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-8px)}75%{transform:translateX(8px)}}
 .hdr{background:linear-gradient(135deg,#1e3a5f,#2563eb);color:#fff;padding:16px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px}
 .hdr h1{font-size:18px;font-weight:700}
-.hdr-r{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.hdr-r{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.hdr-r select{min-width:80px}
 .hdr-r label{color:#bfdbfe;font-size:12px}
 .hdr-r select{padding:5px 10px;border-radius:5px;border:none;font-size:13px}
 .wrap{max-width:1500px;margin:0 auto;padding:16px}
@@ -35,14 +35,14 @@ td{padding:6px;border-bottom:1px solid var(--bd);white-space:nowrap}
 tr:hover td{background:#f8fafc}
 .n{text-align:right;font-variant-numeric:tabular-nums}
 .up{color:var(--g)}.dn{color:var(--r)}
-.tw{max-height:600px;overflow:auto;border:1px solid var(--bd);border-radius:8px}
+.tw{overflow:auto;border:1px solid var(--bd);border-radius:8px}
 .chips{display:flex;gap:4px;flex-wrap:wrap}
 .chip{padding:3px 10px;border-radius:12px;font-size:11px;cursor:pointer;border:1px solid var(--bd);transition:.15s;background:#fff;user-select:none}
 .chip.on{background:var(--p);color:#fff;border-color:var(--p)}
 .tabs{display:flex;gap:4px;flex-wrap:wrap}
 .tab{padding:5px 12px;border-radius:6px;border:1px solid var(--bd);cursor:pointer;font-size:12px;background:#fff;transition:.15s;user-select:none}
 .tab.on{background:var(--p);color:#fff;border-color:var(--p)}
-.ch-box{position:relative;height:340px}
+.ch-box{position:relative;height:440px}
 .grid4{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px;margin-bottom:14px}
 .sb{background:var(--bg);border-radius:8px;padding:12px;text-align:center;border:1px solid var(--bd)}
 .sb .lb{font-size:11px;color:var(--mt)}
@@ -56,6 +56,8 @@ input.sm{padding:3px 6px;font-size:12px;border-radius:4px;border:1px solid var(-
 .bgym{background:#fffbeb}
 .bgsm{background:#f8fafc}
 .tot-row td{background:#eff6ff!important;font-weight:700}
+.rep-link{cursor:pointer;color:#1d4ed8;text-decoration:underline dotted}
+.rep-link:hover{color:#1e40af;background:#dbeafe;text-decoration:underline solid}
 </style>
 </head>
 <body>
@@ -74,6 +76,9 @@ input.sm{padding:3px 6px;font-size:12px;border-radius:4px;border:1px solid var(-
   <div class="hdr-r">
     <label>지사</label>
     <select id="selBranch"><option value="전체">전체</option></select>
+    <label style="margin-left:6px">기준연월</label>
+    <select id="selYear"></select>
+    <select id="selMonth"></select>
   </div>
 </div>
 <div class="wrap">
@@ -150,6 +155,74 @@ const DATA = {"raw":[{"ym":"202501","dept":"전사부","work":"컨설팅","name"
 const fmt = n => n==null?'-':n.toLocaleString('ko-KR');
 const fmtM = n => {if(n==null)return'-';const a=Math.abs(n);if(a>=100000000)return(n/100000000).toFixed(1)+'억';if(a>=10000)return Math.round(n/10000).toLocaleString()+'만';return fmt(n);};
 
+// === 기준연월 상태 & 헬퍼 ===
+const allYMs = DATA.months.slice();          // ["202501",...,"202603"]
+const selYear = document.getElementById('selYear');
+const selMonth = document.getElementById('selMonth');
+const yearsSet = [...new Set(allYMs.map(m => m.slice(0,4)))].sort();
+yearsSet.forEach(y => { const o=document.createElement('option'); o.value=y; o.textContent=y+'년'; selYear.appendChild(o); });
+function refreshMonthOptions(){
+  const y = selYear.value;
+  const ms = allYMs.filter(m=>m.slice(0,4)===y).map(m=>m.slice(4));
+  const prev = selMonth.value;
+  selMonth.innerHTML = ms.map(m=>`<option value="${m}">${parseInt(m)}월</option>`).join('');
+  if (ms.includes(prev)) selMonth.value = prev;
+  else selMonth.value = ms[ms.length-1] || '';
+}
+// 기본값 = 최신월
+selYear.value = allYMs[allYMs.length-1].slice(0,4);
+refreshMonthOptions();
+selMonth.value = allYMs[allYMs.length-1].slice(4);
+
+function getBaseYm(){ return selYear.value + selMonth.value; }
+function getTrendMonths(){
+  const base = getBaseYm();
+  const i = allYMs.indexOf(base);
+  if (i < 0) return allYMs.slice(-24);
+  return allYMs.slice(Math.max(0,i-23), i+1);   // 24개월(선택월 포함)
+}
+function getDetailMonths(){
+  const base = getBaseYm();
+  const i = allYMs.indexOf(base);
+  if (i < 0) return allYMs.slice(-4);
+  return allYMs.slice(Math.max(0,i-3), i+1);    // 4개월(당월+3개월 전)
+}
+
+// === Chart.js 인라인 플러그인: 모든 데이터 포인트 금액 상시 표시 ===
+const dataLabelPlugin = {
+  id: 'dataLabelAll',
+  afterDatasetsDraw(chart){
+    const {ctx} = chart;
+    ctx.save();
+    chart.data.datasets.forEach((ds, di)=>{
+      const meta = chart.getDatasetMeta(di);
+      if (meta.hidden) return;
+      meta.data.forEach((el, i)=>{
+        const v = ds.data[i];
+        if (v == null || v === 0) return;
+        const label = fmtM(v);
+        ctx.font = 'bold 12px "Segoe UI","Malgun Gothic",sans-serif';
+        ctx.textAlign = 'center';
+        if (ds.type === 'line') {
+          // 선 그래프: 포인트 위쪽에 녹색 라벨
+          ctx.textBaseline = 'bottom';
+          ctx.fillStyle = '#065f46';
+          ctx.fillText(label, el.x, el.y - 7);
+        } else {
+          // 막대 그래프: 양수는 위쪽, 음수는 아래쪽
+          const base = meta.vScale ? meta.vScale.getPixelForValue(0) : el.base;
+          const above = el.y < base;
+          ctx.textBaseline = above ? 'bottom' : 'top';
+          ctx.fillStyle = ds.label === '총매출' ? '#1e3a8a' : ds.label === '비용매출' ? '#7f1d1d' : '#0f172a';
+          ctx.fillText(label, el.x, above ? el.y - 4 : el.y + 4);
+        }
+      });
+    });
+    ctx.restore();
+  }
+};
+
+
 const selBranch=document.getElementById('selBranch');
 const selRep=document.getElementById('selRep');
 const minNetInput=document.getElementById('minNet');
@@ -185,11 +258,13 @@ function fVendor(){
 function renderSummary(){
   const f=fRaw(),box=document.getElementById('summaryCards');
   const byM={};f.forEach(d=>{if(!byM[d.ym])byM[d.ym]={s:0,c:0,n:0,cnt:0};byM[d.ym].s+=d.sales;byM[d.ym].c+=d.cost;byM[d.ym].n+=d.net;byM[d.ym].cnt+=d.cnt;});
-  const last=DATA.months[DATA.months.length-1],prev=DATA.months[DATA.months.length-2];
-  const cur=byM[last]||{s:0,c:0,n:0,cnt:0},prv=byM[prev]||{s:0,c:0,n:0,cnt:0};
+  const base=getBaseYm();
+  const bi=allYMs.indexOf(base);
+  const prev=bi>0?allYMs[bi-1]:null;
+  const cur=byM[base]||{s:0,c:0,n:0,cnt:0},prv=prev?(byM[prev]||{s:0,c:0,n:0,cnt:0}):{s:0,c:0,n:0,cnt:0};
   function cd(lb,v,pv){const d=v-pv,p=pv?((v/pv-1)*100).toFixed(1):'N/A',cls=d>=0?'up':'dn',ar=d>=0?'▲':'▼';
     return`<div class="sb"><div class="lb">${lb}</div><div class="vl">${fmt(v)}</div><div class="dl ${cls}">${ar} ${fmt(Math.abs(d))} (${p}%)</div></div>`;}
-  const yl=last.slice(0,4)+'년 '+parseInt(last.slice(4))+'월';
+  const yl=base.slice(0,4)+'년 '+parseInt(base.slice(4))+'월';
   box.innerHTML=cd(yl+' 총매출',cur.s,prv.s)+cd(yl+' 비용매출',cur.c,prv.c)+cd(yl+' 순매출',cur.n,prv.n)+cd(yl+' 건수',cur.cnt,prv.cnt);
 }
 
@@ -197,10 +272,11 @@ let trendChart=null;
 function renderTrend(){
   const f=fRaw(),byM={};
   f.forEach(d=>{if(!byM[d.ym])byM[d.ym]={s:0,c:0,n:0};byM[d.ym].s+=d.sales;byM[d.ym].c+=d.cost;byM[d.ym].n+=d.net;});
-  const labels=DATA.months.map(m=>m.slice(2,4)+'.'+parseInt(m.slice(4)));
-  const sA=DATA.months.map(m=>(byM[m]||{}).s||0);
-  const nA=DATA.months.map(m=>(byM[m]||{}).n||0);
-  const cA=DATA.months.map(m=>(byM[m]||{}).c||0);
+  const months=getTrendMonths();
+  const labels=months.map(m=>m.slice(2,4)+'.'+parseInt(m.slice(4)));
+  const sA=months.map(m=>(byM[m]||{}).s||0);
+  const nA=months.map(m=>(byM[m]||{}).n||0);
+  const cA=months.map(m=>(byM[m]||{}).c||0);
   const ctx=document.getElementById('chartTrend').getContext('2d');
   if(trendChart)trendChart.destroy();
   const ds=[];
@@ -210,9 +286,10 @@ function renderTrend(){
   }
   if(chartMetric!=='sales')ds.push({label:'순매출',type:'line',data:nA,borderColor:'#16a34a',borderWidth:2.5,pointRadius:5,pointBackgroundColor:'#16a34a',fill:false,order:1,tension:.2});
   trendChart=new Chart(ctx,{type:'bar',data:{labels,datasets:ds},options:{responsive:true,maintainAspectRatio:false,
-    plugins:{legend:{position:'top',labels:{font:{size:11}}},tooltip:{callbacks:{label:i=>i.dataset.label+': '+fmtM(i.raw)}}},
-    scales:{y:{ticks:{callback:v=>fmtM(v)},grid:{color:'#f1f5f9'}},x:{grid:{display:false}}}
-  }});
+    layout:{padding:{top:26}},
+    plugins:{legend:{position:'top',labels:{font:{size:12}}},tooltip:{callbacks:{label:i=>i.dataset.label+': '+fmt(i.raw)}}},
+    scales:{y:{ticks:{callback:v=>fmtM(v),font:{size:11}},grid:{color:'#f1f5f9'}},x:{ticks:{font:{size:11}},grid:{display:false}}}
+  },plugins:[dataLabelPlugin]});
 }
 
 function renderTable(){
@@ -249,13 +326,14 @@ function renderTable(){
   const pivot={};
   Object.values(agg).forEach(a=>{if(!pivot[a.key])pivot[a.key]={};pivot[a.key][a.ym]={sales:a.sales,cost:a.cost,net:a.net,cnt:a.cnt};});
 
-  const last=DATA.months[DATA.months.length-1];
+  const monthsShown=getDetailMonths();
+  const last=monthsShown[monthsShown.length-1];
   let keys=Object.keys(pivot);
 
   // minNet filter for vendor view
   if(isVendor&&minNet>0){
     keys=keys.filter(k=>{
-      let maxN=0;DATA.months.forEach(m=>{const v=(pivot[k][m]||{}).net||0;if(Math.abs(v)>maxN)maxN=Math.abs(v);});
+      let maxN=0;monthsShown.forEach(m=>{const v=(pivot[k][m]||{}).net||0;if(Math.abs(v)>maxN)maxN=Math.abs(v);});
       return maxN>=minNet;
     });
   }
@@ -266,7 +344,7 @@ function renderTable(){
   const extraCols=isVendor?'<th rowspan="2">부서</th><th rowspan="2">업무</th><th rowspan="2">영업담당</th>':'';
   let th1='<tr><th rowspan="2">#</th><th rowspan="2">구분</th>'+extraCols;
   let th2='<tr>';
-  DATA.months.forEach((m,i)=>{
+  monthsShown.forEach((m,i)=>{
     const ml=m.slice(2,4)+'.'+parseInt(m.slice(4))+'월';
     th1+=`<th colspan="3" style="text-align:center" class="ml">${ml}</th>`;
     if(i>0)th1+=`<th rowspan="2" style="text-align:center" class="ml bgym" title="전월대비 순매출 증감률">증감</th>`;
@@ -281,12 +359,26 @@ function renderTable(){
     const row=pivot[k];
     const vi=vendorInfo[k]||{};
     const extra=isVendor?`<td><span style="background:#dbeafe;color:#1e40af;padding:1px 6px;border-radius:8px;font-size:11px">${vi.dept||''}</span></td><td>${vi.work||''}</td><td>${vi.rep||'-'}</td>`:'';
-    tbody+=`<tr><td>${idx+1}</td><td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${k}">${k}</td>${extra}`;
-    DATA.months.forEach((m,i)=>{
+    // rep 관련 뷰는 영업담당 부분에 drill-down 링크 적용
+    let kDisp = k;
+    const repLinkable = (view==='rep'||view==='branch_rep'||view==='dept_rep');
+    if (repLinkable){
+      if (view==='rep') {
+        kDisp = `<span class="rep-link" data-rep="${k.replace(/"/g,'&quot;')}" title="클릭 → 이 담당자의 업체별 리스트로 이동">${k}</span>`;
+      } else {
+        // 'A · B' 포맷 중 뒤쪽이 rep
+        const parts = k.split(' · ');
+        const repName = parts[parts.length-1];
+        parts[parts.length-1] = `<span class="rep-link" data-rep="${repName.replace(/"/g,'&quot;')}" title="클릭 → 이 담당자의 업체별 리스트로 이동">${repName}</span>`;
+        kDisp = parts.join(' · ');
+      }
+    }
+    tbody+=`<tr><td>${idx+1}</td><td style="font-weight:600;max-width:200px;overflow:hidden;text-overflow:ellipsis" title="${k}">${kDisp}</td>${extra}`;
+    monthsShown.forEach((m,i)=>{
       const c=row[m]||{sales:0,cost:0,net:0};
       tbody+=`<td class="n ml">${fmt(c.sales)}</td><td class="n">${fmt(c.cost)}</td><td class="n" style="font-weight:600">${fmt(c.net)}</td>`;
       if(i>0){
-        const pm=DATA.months[i-1],p=row[pm]||{net:0};
+        const pm=monthsShown[i-1],p=row[pm]||{net:0};
         const d=c.net-p.net,cls=d>=0?'up':'dn',ar=d>0?'▲':d<0?'▼':'';
         const pv=p.net?((c.net/p.net-1)*100).toFixed(1)+'%':(c.net>0?'NEW':'-');
         tbody+=`<td class="n ${cls} ml bgym" style="font-size:11px">${ar}${pv}</td>`;
@@ -298,11 +390,11 @@ function renderTable(){
   // Total
   tbody+='<tr class="tot-row"><td></td><td>합계</td>';
   if(isVendor)tbody+='<td></td><td></td><td></td>';
-  DATA.months.forEach((m,i)=>{
+  monthsShown.forEach((m,i)=>{
     let ts=0,tc=0,tn=0;keys.forEach(k=>{const c=pivot[k][m]||{sales:0,cost:0,net:0};ts+=c.sales;tc+=c.cost;tn+=c.net;});
     tbody+=`<td class="n ml">${fmt(ts)}</td><td class="n">${fmt(tc)}</td><td class="n">${fmt(tn)}</td>`;
     if(i>0){
-      let ptn=0;const pm=DATA.months[i-1];keys.forEach(k=>{ptn+=(pivot[k][pm]||{net:0}).net;});
+      let ptn=0;const pm=monthsShown[i-1];keys.forEach(k=>{ptn+=(pivot[k][pm]||{net:0}).net;});
       const d=tn-ptn,cls=d>=0?'up':'dn',ar=d>0?'▲':d<0?'▼':'';
       tbody+=`<td class="n ${cls} ml bgym" style="font-size:11px">${ar}${ptn?((tn/ptn-1)*100).toFixed(1)+'%':''}</td>`;
     }
@@ -317,12 +409,34 @@ function renderAll(){renderSummary();renderTrend();renderTable();}
 selBranch.onchange=renderAll;
 selRep.onchange=renderAll;
 minNetInput.onchange=renderAll;
+selYear.onchange=()=>{refreshMonthOptions();renderAll();};
+selMonth.onchange=renderAll;
 
 document.getElementById('viewTabs').onclick=e=>{
   const t=e.target.closest('.tab');if(!t)return;
   document.querySelectorAll('#viewTabs .tab').forEach(x=>x.classList.remove('on'));
   t.classList.add('on');currentView=t.dataset.v;renderTable();
 };
+
+// 영업담당 셀 클릭 → 업체별 뷰로 전환 + selRep 필터링
+document.getElementById('tableWrap').addEventListener('click', e=>{
+  const span = e.target.closest('.rep-link');
+  if (!span) return;
+  const rep = span.getAttribute('data-rep');
+  // selRep 드롭다운 값 설정
+  const opt = [...selRep.options].find(o=>o.value===rep);
+  if (opt) selRep.value = rep;
+  // 뷰 탭을 '업체별'로 전환
+  document.querySelectorAll('#viewTabs .tab').forEach(x=>{
+    x.classList.toggle('on', x.dataset.v==='vendor');
+  });
+  currentView = 'vendor';
+  // 부서/업무 체크 박스는 유지, 전체 다시 렌더
+  renderAll();
+  // 사용자에게 현재 필터 상태를 간단히 알림
+  const msg = document.getElementById('tableWrap');
+  if (msg) msg.scrollIntoView({behavior:'smooth', block:'start'});
+});
 document.getElementById('chartTabs').onclick=e=>{
   const t=e.target.closest('.tab');if(!t)return;
   document.querySelectorAll('#chartTabs .tab').forEach(x=>x.classList.remove('on'));
