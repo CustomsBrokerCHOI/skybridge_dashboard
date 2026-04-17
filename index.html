@@ -326,8 +326,9 @@ function renderTable(){
   const pivot={};
   Object.values(agg).forEach(a=>{if(!pivot[a.key])pivot[a.key]={};pivot[a.key][a.ym]={sales:a.sales,cost:a.cost,net:a.net,cnt:a.cnt};});
 
-  const monthsShown=getDetailMonths();
-  const last=monthsShown[monthsShown.length-1];
+  // 최신월이 업체명 바로 옆에 오도록 역순 배열 [현재월, 1개월전, 2개월전, 3개월전]
+  const monthsShown=getDetailMonths().slice().reverse();
+  const last=monthsShown[0];  // 역순이므로 첫 번째가 최신월
   let keys=Object.keys(pivot);
 
   // minNet filter for vendor view
@@ -347,9 +348,10 @@ function renderTable(){
   monthsShown.forEach((m,i)=>{
     const ml=m.slice(2,4)+'.'+parseInt(m.slice(4))+'월';
     th1+=`<th colspan="3" style="text-align:center" class="ml">${ml}</th>`;
-    if(i>0)th1+=`<th rowspan="2" style="text-align:center" class="ml bgym" title="전월대비 순매출 증감률">증감</th>`;
+    // 역순: 마지막(가장 오래된) 월은 더 이전 달 비교 대상이 없으므로 증감 제외
+    if(i<monthsShown.length-1)th1+=`<th rowspan="2" style="text-align:center" class="ml bgym" title="전월대비 순매출 증감률">증감</th>`;
     th2+=`<td class="ml bgsm" style="font-weight:600;text-align:right">총매출</td><td class="bgsm" style="font-weight:600;text-align:right">비용</td><td class="bgsm" style="font-weight:600;text-align:right">순매출</td>`;
-    if(i>0)th2+='<td></td>';
+    if(i<monthsShown.length-1)th2+='<td></td>';
   });
   th1+='</tr>';th2+='</tr>';
 
@@ -377,8 +379,9 @@ function renderTable(){
     monthsShown.forEach((m,i)=>{
       const c=row[m]||{sales:0,cost:0,net:0};
       tbody+=`<td class="n ml">${fmt(c.sales)}</td><td class="n">${fmt(c.cost)}</td><td class="n" style="font-weight:600">${fmt(c.net)}</td>`;
-      if(i>0){
-        const pm=monthsShown[i-1],p=row[pm]||{net:0};
+      // 역순: i번째 월의 "전월"은 monthsShown[i+1] (더 오래된 쪽)
+      if(i<monthsShown.length-1){
+        const pm=monthsShown[i+1],p=row[pm]||{net:0};
         const d=c.net-p.net,cls=d>=0?'up':'dn',ar=d>0?'▲':d<0?'▼':'';
         const pv=p.net?((c.net/p.net-1)*100).toFixed(1)+'%':(c.net>0?'NEW':'-');
         tbody+=`<td class="n ${cls} ml bgym" style="font-size:11px">${ar}${pv}</td>`;
@@ -393,8 +396,8 @@ function renderTable(){
   monthsShown.forEach((m,i)=>{
     let ts=0,tc=0,tn=0;keys.forEach(k=>{const c=pivot[k][m]||{sales:0,cost:0,net:0};ts+=c.sales;tc+=c.cost;tn+=c.net;});
     tbody+=`<td class="n ml">${fmt(ts)}</td><td class="n">${fmt(tc)}</td><td class="n">${fmt(tn)}</td>`;
-    if(i>0){
-      let ptn=0;const pm=monthsShown[i-1];keys.forEach(k=>{ptn+=(pivot[k][pm]||{net:0}).net;});
+    if(i<monthsShown.length-1){
+      let ptn=0;const pm=monthsShown[i+1];keys.forEach(k=>{ptn+=(pivot[k][pm]||{net:0}).net;});
       const d=tn-ptn,cls=d>=0?'up':'dn',ar=d>0?'▲':d<0?'▼':'';
       tbody+=`<td class="n ${cls} ml bgym" style="font-size:11px">${ar}${ptn?((tn/ptn-1)*100).toFixed(1)+'%':''}</td>`;
     }
