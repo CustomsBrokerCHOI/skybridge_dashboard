@@ -76,9 +76,16 @@ input.sm{padding:3px 6px;font-size:12px;border-radius:4px;border:1px solid var(-
   <div class="hdr-r">
     <label>지사</label>
     <select id="selBranch"><option value="전체">전체</option></select>
-    <label style="margin-left:6px">기준연월</label>
-    <select id="selYear"></select>
-    <select id="selMonth"></select>
+    <label style="margin-left:8px">영업담당</label>
+    <select id="selRep" class="sm"><option value="">전체</option></select>
+    <label style="margin-left:8px">업무</label>
+    <select id="selWork" class="sm"><option value="">전체</option></select>
+    <label style="margin-left:8px">업체</label>
+    <input id="selVendor" class="sm" type="text" placeholder="업체 검색…" style="width:90px;padding:3px 6px;border:1px solid #cbd5e1;border-radius:4px;font-size:13px">
+    <label style="margin-left:10px">시작</label>
+    <select id="selYearFrom"></select><select id="selMonthFrom"></select>
+    <label style="margin-left:6px">종료</label>
+    <select id="selYear"></select><select id="selMonth"></select>
   </div>
 </div>
 <div class="wrap">
@@ -117,11 +124,7 @@ input.sm{padding:3px 6px;font-size:12px;border-radius:4px;border:1px solid var(-
     <label>부서</label><div class="chips" id="deptChips"></div>
   </div>
   <div class="ctrl">
-    <label>업무</label><div class="chips" id="workChips"></div>
-  </div>
-  <div class="ctrl">
-    <label>영업담당</label><select id="selRep" class="sm"><option value="">전체</option></select>
-    <label style="margin-left:12px">최소 순매출</label><input id="minNet" class="sm" type="number" value="0" step="100000" title="업체별 뷰에서 최소 순매출 필터">
+    <label>최소 순매출</label><input id="minNet" class="sm" type="number" value="0" step="100000" title="업체별 뷰에서 최소 순매출 필터">
   </div>
   <div class="tw" id="tableWrap"></div>
 </div>
@@ -130,9 +133,9 @@ input.sm{padding:3px 6px;font-size:12px;border-radius:4px;border:1px solid var(-
   <h2>&#x1F4E5; 데이터 내려받기</h2>
   <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;margin-top:14px">
     <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px">
-      <div style="font-weight:600;margin-bottom:6px">Raw 데이터 &#8212; 선택 월</div>
-      <div style="font-size:12px;color:#64748b;margin-bottom:12px">현재 선택된 연월의 전체 실적 원본</div>
-      <button onclick="dlRawMonth()" style="background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:13px;width:100%">&#x2B07; CSV 다운로드</button>
+      <div style="font-weight:600;margin-bottom:6px">Raw 데이터 &#8212; 선택 기간</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:12px">선택된 시작~종료 기간의 전체 실적 원본</div>
+      <button onclick="dlRawPeriod()" style="background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:13px;width:100%">&#x2B07; CSV 다운로드</button>
     </div>
     <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px">
       <div style="font-weight:600;margin-bottom:6px">Raw 데이터 &#8212; 전체 기간</div>
@@ -200,20 +203,29 @@ function refreshMonthOptions(){
 selYear.value = allYMs[allYMs.length-1].slice(0,4);
 refreshMonthOptions();
 selMonth.value = allYMs[allYMs.length-1].slice(4);
+const selYearFrom=document.getElementById('selYearFrom');
+const selMonthFrom=document.getElementById('selMonthFrom');
+yearsSet.forEach(y=>{const o=document.createElement('option');o.value=y;o.textContent=y+'년';selYearFrom.appendChild(o);});
+function refreshFromMonthOptions(){
+  const y=selYearFrom.value;
+  const ms=[...new Set(DATA.months.filter(m=>m.startsWith(y)).map(m=>m.slice(4)))].sort();
+  const prev=selMonthFrom.value;
+  selMonthFrom.innerHTML=ms.map(m=>`<option value="${m}">${parseInt(m)}월</option>`).join('');
+  if(ms.includes(prev))selMonthFrom.value=prev;else selMonthFrom.value=ms[0]||'';
+}
+selYearFrom.value=allYMs[0].slice(0,4);
+refreshFromMonthOptions();
+selMonthFrom.value=allYMs[0].slice(4);
 
-function getBaseYm(){ return selYear.value + selMonth.value; }
-function getTrendMonths(){
-  const base = getBaseYm();
-  const i = allYMs.indexOf(base);
-  if (i < 0) return allYMs.slice(-24);
-  return allYMs.slice(Math.max(0,i-23), i+1);   // 24개월(선택월 포함)
+function getStartYm(){ return selYearFrom.value + selMonthFrom.value; }
+function getEndYm(){ return selYear.value + selMonth.value; }
+function getBaseYm(){ return getEndYm(); }
+function getPeriodYms(){
+  const s=getStartYm(),e=getEndYm();
+  return allYMs.filter(m=>m>=s&&m<=e);
 }
-function getDetailMonths(){
-  const base = getBaseYm();
-  const i = allYMs.indexOf(base);
-  if (i < 0) return allYMs.slice(-4);
-  return allYMs.slice(Math.max(0,i-3), i+1);    // 4개월(당월+3개월 전)
-}
+function getTrendMonths(){ return getPeriodYms(); }
+function getDetailMonths(){ return getPeriodYms().slice().reverse(); }
 
 // === Chart.js 인라인 플러그인: 모든 데이터 포인트 금액 상시 표시 ===
 const dataLabelPlugin = {
@@ -252,11 +264,14 @@ const dataLabelPlugin = {
 
 const selBranch=document.getElementById('selBranch');
 const selRep=document.getElementById('selRep');
+const selWork=document.getElementById('selWork');
+const selVendor=document.getElementById('selVendor');
 const minNetInput=document.getElementById('minNet');
 DATA.branches.forEach(b=>{const o=document.createElement('option');o.value=b;o.textContent=b;selBranch.appendChild(o);});
 DATA.reps.forEach(r=>{const o=document.createElement('option');o.value=r;o.textContent=r;selRep.appendChild(o);});
+DATA.works.forEach(w=>{const o=document.createElement('option');o.value=w;o.textContent=w;selWork.appendChild(o);});
 
-let activeDepts=new Set(DATA.depts), activeWorks=new Set(DATA.works);
+let activeDepts=new Set(DATA.depts);
 let currentView='branch', chartMetric='both';
 
 function mkChips(id,items,activeSet,cb){
@@ -271,28 +286,48 @@ function mkChips(id,items,activeSet,cb){
   });
 }
 mkChips('deptChips',DATA.depts,activeDepts,renderAll);
-mkChips('workChips',DATA.works,activeWorks,renderAll);
 
 function fRaw(){
-  const br=selBranch.value,rp=selRep.value;
-  return DATA.raw.filter(d=>(br==='전체'||d.branch===br)&&activeDepts.has(d.dept)&&activeWorks.has(d.work)&&(!rp||d.rep===rp));
+  const br=selBranch.value,rp=selRep.value,wk=selWork.value;
+  const vn=selVendor.value.trim().toLowerCase();
+  const s=getStartYm(),e=getEndYm();
+  return DATA.raw.filter(d=>d.ym>=s&&d.ym<=e&&(br==='전체'||d.branch===br)&&activeDepts.has(d.dept)&&(!wk||d.work===wk)&&(!rp||d.rep===rp)&&(!vn||d.name.toLowerCase().includes(vn)));
 }
 function fVendor(){
-  const br=selBranch.value,rp=selRep.value;
-  return DATA.vendors.filter(d=>(br==='전체'||d.branch===br)&&activeDepts.has(d.dept)&&activeWorks.has(d.work)&&(!rp||d.rep===rp));
+  const br=selBranch.value,rp=selRep.value,wk=selWork.value;
+  const vn=selVendor.value.trim().toLowerCase();
+  const s=getStartYm(),e=getEndYm();
+  return DATA.vendors.filter(d=>(br==='전체'||d.branch===br)&&(!wk||d.work===wk)&&(!rp||d.rep===rp)&&(!vn||d.name.toLowerCase().includes(vn)));
 }
 
 function renderSummary(){
   const f=fRaw(),box=document.getElementById('summaryCards');
-  const byM={};f.forEach(d=>{if(!byM[d.ym])byM[d.ym]={s:0,c:0,n:0,cnt:0};byM[d.ym].s+=d.sales;byM[d.ym].c+=d.cost;byM[d.ym].n+=d.net;byM[d.ym].cnt+=d.cnt;});
-  const base=getBaseYm();
-  const bi=allYMs.indexOf(base);
-  const prev=bi>0?allYMs[bi-1]:null;
-  const cur=byM[base]||{s:0,c:0,n:0,cnt:0},prv=prev?(byM[prev]||{s:0,c:0,n:0,cnt:0}):{s:0,c:0,n:0,cnt:0};
-  function cd(lb,v,pv){const d=v-pv,p=pv?((v/pv-1)*100).toFixed(1):'N/A',cls=d>=0?'up':'dn',ar=d>=0?'▲':'▼';
-    return`<div class="sb"><div class="lb">${lb}</div><div class="vl">${fmt(v)}</div><div class="dl ${cls}">${ar} ${fmt(Math.abs(d))} (${p}%)</div></div>`;}
-  const yl=base.slice(0,4)+'년 '+parseInt(base.slice(4))+'월';
-  box.innerHTML=cd(yl+' 총매출',cur.s,prv.s)+cd(yl+' 비용매출',cur.c,prv.c)+cd(yl+' 순매출',cur.n,prv.n)+cd(yl+' 건수',cur.cnt,prv.cnt);
+  let ts=0,tc=0,tn=0,tcnt=0;
+  f.forEach(d=>{ts+=d.sales;tc+=d.cost;tn+=d.net;tcnt+=d.cnt;});
+  const s=getStartYm(),e=getEndYm();
+  const sl=s.slice(0,4)+'년 '+parseInt(s.slice(4))+'월';
+  const el=e.slice(0,4)+'년 '+parseInt(e.slice(4))+'월';
+  const period=s===e?el:(sl+' ~ '+el);
+  function cd(lb,v,pv){
+    const base2=`<div class="sb"><div class="lb">${lb}</div><div class="vl">${fmt(v)}</div>`;
+    if(pv==null)return base2+'</div>';
+    const dv=v-pv,p=pv?((v/pv-1)*100).toFixed(1):'N/A',cls=dv>=0?'up':'dn',ar=dv>=0?'▲':'▼';
+    return base2+`<div class="dl ${cls}">${ar} ${fmt(Math.abs(dv))} (${p}%)</div></div>`;
+  }
+  // 단일월: 전월 비교 표시
+  if(s===e){
+    const bi=allYMs.indexOf(s);
+    const prev=bi>0?allYMs[bi-1]:null;
+    let ps=0,pc=0,pn=0,pcnt=0;
+    if(prev){
+      const br=selBranch.value,rp=selRep.value,wk=selWork.value,vn=selVendor.value.trim().toLowerCase();
+      DATA.raw.filter(d=>d.ym===prev&&(br==='전체'||d.branch===br)&&activeDepts.has(d.dept)&&(!wk||d.work===wk)&&(!rp||d.rep===rp)&&(!vn||d.name.toLowerCase().includes(vn)))
+        .forEach(d=>{ps+=d.sales;pc+=d.cost;pn+=d.net;pcnt+=d.cnt;});
+    }
+    box.innerHTML=cd(period+' 총매출',ts,prev?ps:null)+cd(period+' 비용매출',tc,prev?pc:null)+cd(period+' 순매출',tn,prev?pn:null)+cd(period+' 건수',tcnt,prev?pcnt:null);
+  } else {
+    box.innerHTML=cd(period+' 총매출',ts,null)+cd(period+' 비용매출',tc,null)+cd(period+' 순매출',tn,null)+cd(period+' 건수',tcnt,null);
+  }
 }
 
 let trendChart=null;
@@ -438,7 +473,11 @@ function renderAll(){renderSummary();renderTrend();renderTable();}
 
 selBranch.onchange=renderAll;
 selRep.onchange=renderAll;
+selWork.onchange=renderAll;
+selVendor.oninput=renderAll;
 minNetInput.onchange=renderAll;
+selYearFrom.onchange=()=>{refreshFromMonthOptions();renderAll();};
+selMonthFrom.onchange=renderAll;
 selYear.onchange=()=>{refreshMonthOptions();renderAll();};
 selMonth.onchange=renderAll;
 
@@ -496,14 +535,13 @@ function _saveCsv(blob, name) {
 }
 
 // ========== branch_dashboard 다운로드 ==========
-function dlRawMonth() {
-  const y = document.getElementById('selYear') ? document.getElementById('selYear').value : '';
-  const m = document.getElementById('selMonth').value;
-  const ym = y + m;
-  const rows = DATA.raw.filter(r => r.ym === ym);
-  const cols   = ['ym','branch','dept','work','name','bno','rep','bp','sales','cost','net','cnt'];
-  const labels = ['연월','지사','부서','업무','업체명','사업자번호','영업담당','통관지점','매출','비용매출','순매출','건수'];
-  _saveCsv(_toCsvBlob(rows, cols, labels), '실적_raw_' + ym + '.csv');
+function dlRawPeriod() {
+  const s=getStartYm(),e=getEndYm();
+  const rows=DATA.raw.filter(r=>r.ym>=s&&r.ym<=e);
+  const fname=s===e?('실적_raw_'+s+'.csv'):('실적_raw_'+s+'~'+e+'.csv');
+  const cols=['ym','branch','dept','work','name','bno','rep','bp','sales','cost','net','cnt'];
+  const labels=['연월','지사','부서','업무','업체명','사업자번호','영업담당','통관지점','매출','비용매출','순매출','건수'];
+  _saveCsv(_toCsvBlob(rows,cols,labels),fname);
 }
 function dlRawAll() {
   const cols   = ['ym','branch','dept','work','name','bno','rep','bp','sales','cost','net','cnt'];
