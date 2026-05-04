@@ -144,12 +144,12 @@ input.sm{padding:3px 6px;font-size:12px;border-radius:4px;border:1px solid var(-
     </div>
     <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px">
       <div style="font-weight:600;margin-bottom:6px">지사별·부서별 집계</div>
-      <div style="font-size:12px;color:#64748b;margin-bottom:12px">월 x 지사 x 부서별 집계 (전체 기간)</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:12px">월 x 지사 x 부서별 집계 (선택 기간)</div>
       <button onclick="dlBranchDeptAgg()" style="background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:13px;width:100%">&#x2B07; CSV 다운로드</button>
     </div>
     <div style="border:1px solid #e2e8f0;border-radius:8px;padding:16px">
       <div style="font-weight:600;margin-bottom:6px">영업담당별 집계</div>
-      <div style="font-size:12px;color:#64748b;margin-bottom:12px">월 x 담당자별 집계 (전체 기간)</div>
+      <div style="font-size:12px;color:#64748b;margin-bottom:12px">월 x 담당자별 집계 (선택 기간)</div>
       <button onclick="dlRepAgg()" style="background:#3b82f6;color:#fff;border:none;border-radius:6px;padding:8px 16px;cursor:pointer;font-size:13px;width:100%">&#x2B07; CSV 다운로드</button>
     </div>
   </div>
@@ -549,8 +549,9 @@ function dlRawAll() {
   _saveCsv(_toCsvBlob(DATA.raw, cols, labels), '실적_raw_전체기간.csv');
 }
 function dlBranchDeptAgg() {
+  const s=getStartYm(),e=getEndYm();
   const agg = {};
-  DATA.raw.forEach(r => {
+  DATA.raw.filter(r=>r.ym>=s&&r.ym<=e).forEach(r => {
     const k = r.ym + '|' + r.branch + '|' + r.dept;
     if (!agg[k]) agg[k] = {ym:r.ym, branch:r.branch, dept:r.dept, sales:0, cost:0, net:0, cnt:0};
     agg[k].sales += r.sales; agg[k].cost += r.cost; agg[k].net += r.net; agg[k].cnt += r.cnt;
@@ -558,11 +559,13 @@ function dlBranchDeptAgg() {
   const rows = Object.values(agg).sort((a,b) => a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0);
   const cols   = ['ym','branch','dept','sales','cost','net','cnt'];
   const labels = ['연월','지사','부서','매출','비용매출','순매출','건수'];
-  _saveCsv(_toCsvBlob(rows, cols, labels), '실적_지사별부서별_집계.csv');
+  const fname = s===e ? ('실적_지사별부서별_'+s+'.csv') : ('실적_지사별부서별_'+s+'~'+e+'.csv');
+  _saveCsv(_toCsvBlob(rows, cols, labels), fname);
 }
 function dlRepAgg() {
+  const s=getStartYm(),e=getEndYm();
   const agg = {};
-  DATA.raw.forEach(r => {
+  DATA.raw.filter(r=>r.ym>=s&&r.ym<=e).forEach(r => {
     const k = r.ym + '|' + r.rep;
     if (!agg[k]) agg[k] = {ym:r.ym, rep:r.rep, sales:0, cost:0, net:0, cnt:0};
     agg[k].sales += r.sales; agg[k].cost += r.cost; agg[k].net += r.net; agg[k].cnt += r.cnt;
@@ -570,7 +573,8 @@ function dlRepAgg() {
   const rows = Object.values(agg).sort((a,b) => a.ym < b.ym ? -1 : a.ym > b.ym ? 1 : 0);
   const cols   = ['ym','rep','sales','cost','net','cnt'];
   const labels = ['연월','영업담당','매출','비용매출','순매출','건수'];
-  _saveCsv(_toCsvBlob(rows, cols, labels), '실적_영업담당별_집계.csv');
+  const fname = s===e ? ('실적_영업담당별_'+s+'.csv') : ('실적_영업담당별_'+s+'~'+e+'.csv');
+  _saveCsv(_toCsvBlob(rows, cols, labels), fname);
 }
 
 </script>
