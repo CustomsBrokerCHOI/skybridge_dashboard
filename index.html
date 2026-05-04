@@ -388,9 +388,9 @@ function renderTable(){
   const pivot={};
   Object.values(agg).forEach(a=>{if(!pivot[a.key])pivot[a.key]={};pivot[a.key][a.ym]={sales:a.sales,cost:a.cost,net:a.net,cnt:a.cnt};});
 
-  // 최신월이 업체명 바로 옆에 오도록 역순 배열 [현재월, 1개월전, 2개월전, 3개월전]
-  const monthsShown=getDetailMonths().slice().reverse();
-  const last=monthsShown[0];  // 역순이므로 첫 번째가 최신월
+  // 최신월이 왼쪽에 오도록: getDetailMonths()는 이미 최신→과거 역순 반환
+  const monthsShown=getDetailMonths();
+  const last=monthsShown[0];  // 첫 번째가 최신월
   let keys=Object.keys(pivot);
 
   // minNet filter for vendor view
